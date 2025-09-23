@@ -8,6 +8,11 @@ var states = Object.freeze({
 
 var currentstate;
 
+// WebSocket support for mobile controller
+var websocket = null;
+var websocketConnected = false;
+var websocketServerUrl = 'ws://localhost:8080';
+
 var gravity = 0.25;
 var velocity = 0;
 var position = 180;
@@ -47,6 +52,9 @@ $(document).ready(function() {
    var savedscore = getCookie("highscore");
    if(savedscore != "")
       highscore = parseInt(savedscore);
+
+   // Initialize WebSocket connection for mobile controller
+   initializeWebSocket();
 
    //start with the splash screen
    showSplash();
@@ -480,3 +488,53 @@ var isIncompatible = {
    return (isIncompatible.Android() || isIncompatible.BlackBerry() || isIncompatible.iOS() || isIncompatible.Opera() || isIncompatible.Safari() || isIncompatible.Windows());
    }
 };
+
+// WebSocket functions for mobile controller support
+function initializeWebSocket() {
+   try {
+      websocket = new WebSocket(websocketServerUrl);
+      
+      websocket.onopen = function(event) {
+         websocketConnected = true;
+         console.log('Connected to WebSocket server for mobile controller');
+         // Register as game client
+         websocket.send('game-client');
+      };
+      
+      websocket.onmessage = function(event) {
+         const message = event.data;
+         console.log('Received WebSocket message:', message);
+         
+         if (message === 'flap') {
+            // Trigger bird flap from mobile controller
+            if (currentstate === states.GameScreen) {
+               playerJump();
+            } else if (currentstate === states.SplashScreen) {
+               startGame();
+            }
+         }
+      };
+      
+      websocket.onclose = function(event) {
+         websocketConnected = false;
+         console.log('WebSocket connection closed');
+         // Attempt to reconnect after 3 seconds
+         setTimeout(initializeWebSocket, 3000);
+      };
+      
+      websocket.onerror = function(error) {
+         websocketConnected = false;
+         console.error('WebSocket error:', error);
+      };
+      
+   } catch (error) {
+      console.error('Error initializing WebSocket:', error);
+      websocketConnected = false;
+   }
+}
+
+function sendWebSocketMessage(message) {
+   if (websocket && websocketConnected) {
+      websocket.send(message);
+   }
+}
