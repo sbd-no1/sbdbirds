@@ -121,9 +121,13 @@ function startGame()
 
    //start up our loops
    var updaterate = 1000.0 / 60.0 ; //60 times a second
-   loopGameloop = setInterval(gameloop, updaterate);
    loopPipeloop = setInterval(updatePipes, 1400);
-
+   function smoothGameLoop(){
+      gameloop();
+      requestAnimationFrame(smoothGameLoop);
+   }
+   
+   requestAnimationFrame(smoothGameLoop);
    //jump from the start!
    playerJump();
 }
