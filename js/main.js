@@ -134,8 +134,13 @@ function updatePlayer(player)
    rotation = Math.min((velocity / 10) * 90, 90);
 
    //apply rotation and position
-   $(player).css({ rotate: rotation, top: position });
+   // CŨ (Gây giật trên iOS do dùng CPU):
+   // $(player).css({ rotate: rotation, top: position });
+
+   // MỚI (Mượt hơn do dùng GPU - Hardware Acceleration):
+   $(player).css({ rotate: rotation, y: position }); 
 }
+
 
 function gameloop() {
    var player = $("#player");
