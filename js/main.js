@@ -23,7 +23,6 @@ var pipewidth = 52;
 var pipes = new Array();
 
 var replayclickable = false;
-var pipeSpeed = 2;
 
 //sounds
 var volume = 30;
@@ -121,26 +120,21 @@ function startGame()
    }
 
    //start up our loops
-   loopGameloop = requestAnimationFrame(gameLoopRAF);;
+   var updaterate = 1000.0 / 60.0 ; //60 times a second
+   loopGameloop = setInterval(gameloop, updaterate);
    loopPipeloop = setInterval(updatePipes, 1400);
 
    //jump from the start!
    playerJump();
 }
-function gameLoopRAF() {
-   gameloop();
-   loopGameloop = requestAnimationFrame(gameLoopRAF);
-}
+
 function updatePlayer(player)
 {
    //rotation
    rotation = Math.min((velocity / 10) * 90, 90);
 
    //apply rotation and position
-   $(player).css({
-   transform: "translateY(" + position + "px) rotate(" + rotation + "deg)",
-   willChange: "transform"
-});
+   $(player).css({ rotate: rotation, top: position });
 }
 
 function gameloop() {
@@ -176,7 +170,7 @@ function gameloop() {
    }
 
    //did we hit the ground?
-   if(position >= flyArea - 24)
+   if(box.bottom >= $("#land").offset().top)
    {
       playerDead();
       return;
@@ -350,7 +344,7 @@ function playerDead()
    currentstate = states.ScoreScreen;
 
    //destroy our gameloops
-   cancelAnimationFrame(loopGameloop);
+   clearInterval(loopGameloop);
    clearInterval(loopPipeloop);
    loopGameloop = null;
    loopPipeloop = null;
@@ -458,7 +452,7 @@ function updatePipes()
    var constraint = flyArea - pipeheight - (padding * 2); //double padding (for top and bottom)
    var topheight = Math.floor((Math.random()*constraint) + padding); //add lower padding
    var bottomheight = (flyArea - pipeheight) - topheight;
-   var newpipe = $('<div class="pipe"><div class="pipe_upper" style="height: ' + topheight + 'px;"></div><div class="pipe_lower" style="height: ' + bottomheight + 'px;"></div></div>');
+   var newpipe = $('<div class="pipe animated"><div class="pipe_upper" style="height: ' + topheight + 'px;"></div><div class="pipe_lower" style="height: ' + bottomheight + 'px;"></div></div>');
    $("#flyarea").append(newpipe);
    pipes.push(newpipe);
 }
