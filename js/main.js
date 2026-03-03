@@ -36,7 +36,14 @@ buzz.all().setVolume(volume);
 //loops
 var loopGameloop;
 var loopPipeloop;
+// Polyfill rAF/cAF để tránh crash trên iOS Safari cũ
+window.requestAnimationFrame = window.requestAnimationFrame
+  || window.webkitRequestAnimationFrame
+  || function (cb) { return setTimeout(cb, 1000/60); };
 
+window.cancelAnimationFrame = window.cancelAnimationFrame
+  || window.webkitCancelAnimationFrame
+  || function (id) { clearTimeout(id); };
 $(document).ready(function() {
    if(window.location.search == "?debug")
       debugmode = true;
@@ -360,34 +367,42 @@ function playerDead()
    currentstate = states.ScoreScreen;
 
 
-   //destroy our gameloops
-   // Hủy game loop rAF
-   if (loopGameloop) {
-   cancelAnimationFrame(loopGameloop);
-   loopGameloop = null;
-   }
-   // Hủy pipe loop (vẫn dùng setInterval)
-   if (loopPipeloop) {
-   clearInterval(loopPipeloop);
-   loopPipeloop = null;
-   }
+   //destroy our gameloops — phiên bản an toàn
+try {
+  if (loopGameloop != null) {
+    // rAF id hoặc timeout id (từ polyfill đều OK)
+    cancelAnimationFrame(loopGameloop);
+    loopGameloop = null;
+  }
+} catch (e) {
+  // fallback: nếu vì lý do gì đó vẫn lỗi, không để văng hàm
+  loopGameloop = null;
+}
 
+if (loopPipeloop != null) {
+  clearInterval(loopPipeloop);
+  loopPipeloop = null;
+}
 
-   //mobile browsers don't support buzz bindOnce event
-   if(isIncompatible.any())
-   {
-      //skip right to showing score
+// --- Từ đây trở xuống là logic cũ ---
+//mobile browsers don't support buzz bindOnce event
+if (isIncompatible.any()) {
+  //skip right to showing score
+  showScore();
+} else {
+  //play the hit sound (then the dead sound) and then show score
+  soundHit.play().bindOnce("ended", function () {
+    soundDie.play().bindOnce("ended", function () {
       showScore();
-   }
-   else
-   {
-      //play the hit sound (then the dead sound) and then show score
-      soundHit.play().bindOnce("ended", function() {
-         soundDie.play().bindOnce("ended", function() {
-            showScore();
-         });
-      });
-   }
+    });
+  });
+
+  // 🚑 Fallback tuyệt đối: nếu audio 'ended' không fire trong 1.2s, vẫn hiện score
+  setTimeout(function () {
+    if ($("#scoreboard").css("display") === "none") {
+      showScore();
+    }
+  }, 1200);
 }
 
 function showScore()
