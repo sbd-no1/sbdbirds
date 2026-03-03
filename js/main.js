@@ -1,482 +1,508 @@
-var debugmode = false;
+/*
+  Refactored Flappy-style game loop for better iOS performance
+  - requestAnimationFrame-based main loop
+  - Transform-based rendering (translate3d + rotate) to avoid layout thrash
+  - Pure logical coordinates for player/pipes; no per-frame layout reads
+  - Keep Buzz.js sounds and existing transition-based effects for UI
+  - Passive touch listeners and limited event targets
+*/
 
-var states = Object.freeze({
-   SplashScreen: 0,
-   GameScreen: 1,
-   ScoreScreen: 2
-});
+(function(){
+  'use strict';
 
-var currentstate;
+  // =====================
+  // Config & State
+  // =====================
+  var debugmode = false;
+  var states = Object.freeze({
+    SplashScreen: 0,
+    GameScreen: 1,
+    ScoreScreen: 2
+  });
+  var currentstate;
 
-var gravity = 0.25;
-var velocity = 0;
-var position = 180;
-var rotation = 0;
-var jump = -4.6;
-var flyArea = $("#flyarea").height();
+  // Physics
+  var gravity = 0.25;
+  var jump = -4.6;
 
-var score = 0;
-var highscore = 0;
+  // Player visuals
+  var PLAYER_WIDTH = 34.0;
+  var PLAYER_HEIGHT = 24.0;
+  var playerX = 60; // fixed logical X
 
-var pipeheight = 110;
-var pipewidth = 52;
-var pipes = new Array();
+  // Pipes
+  var pipeGap = 90; // original pipeheight
+  var pipeWidth = 52;
+  var pipePadding = 80;
+  var spawnInterval = 1400; // ms between pipes (keep original cadence)
+  var pipeSpeed = 150; // px/second, JS-driven
 
-var replayclickable = false;
+  // Score
+  var score = 0;
+  var highscore = 0;
 
-//sounds
-var volume = 30;
-var soundJump = new buzz.sound("assets/sounds/sfx_wing.ogg");
-var soundScore = new buzz.sound("assets/sounds/sfx_point.ogg");
-var soundHit = new buzz.sound("assets/sounds/sfx_hit.ogg");
-var soundDie = new buzz.sound("assets/sounds/sfx_die.ogg");
-var soundSwoosh = new buzz.sound("assets/sounds/sfx_swooshing.ogg");
-buzz.all().setVolume(volume);
+  // Audio (keep Buzz.js + add mp3 sources for iOS)
+  var volume = 30;
+  var soundJump = new buzz.sound(["assets/sounds/sfx_wing.mp3", "assets/sounds/sfx_wing.ogg"]);
+  var soundScore = new buzz.sound(["assets/sounds/sfx_point.mp3", "assets/sounds/sfx_point.ogg"]);
+  var soundHit = new buzz.sound(["assets/sounds/sfx_hit.mp3", "assets/sounds/sfx_hit.ogg"]);
+  var soundDie = new buzz.sound(["assets/sounds/sfx_die.mp3", "assets/sounds/sfx_die.ogg"]);
+  var soundSwoosh = new buzz.sound(["assets/sounds/sfx_swooshing.mp3", "assets/sounds/sfx_swooshing.ogg"]);
+  buzz.all().setVolume(volume);
 
-//loops
-var loopGameloop;
-var loopPipeloop;
+  // DOM refs
+  var $doc = $(document);
+  var $win = $(window);
+  var $flyArea = $('#flyarea');
+  var $player = $('#player');
+  var $splash = $('#splash');
+  var $scoreboard = $('#scoreboard');
+  var $replay = $('#replay');
+  var $land = $('#land');
+  var $ceiling = $('#ceiling');
 
-$(document).ready(function() {
-   if(window.location.search == "?debug")
-      debugmode = true;
-   if(window.location.search == "?easy")
-      pipeheight = 200;
+  // Runtime dimensions (resolved once per round)
+  var flyAreaHeight = 0;
+  var flyAreaWidth = 0;
+  var landTop = 0; // y coordinate of land's top edge relative to flyarea
+  var ceilingBottom = 0;
 
-   //get the highscore
-   var savedscore = getCookie("highscore");
-   if(savedscore != "")
-      highscore = parseInt(savedscore);
+  // Player state
+  var velocity = 0;
+  var positionY = 180;
+  var rotation = 0;
 
-   //start with the splash screen
-   showSplash();
-});
+  // Pipes (logic-driven)
+  var pipes = []; // {el: jQueryDiv, x, gapTop, scored}
 
-function getCookie(cname)
-{
-   var name = cname + "=";
-   var ca = document.cookie.split(';');
-   for(var i=0; i<ca.length; i++)
-   {
+  // Loops
+  var rafId = null;
+  var lastTS = 0;
+  var spawnAccumulator = 0;
+
+  // Flags
+  var replayclickable = false;
+  var audioPrimed = false;
+
+  // =====================
+  // Utils
+  // =====================
+  function getCookie(cname){
+    var name = cname + "=";
+    var ca = document.cookie.split(';');
+    for(var i=0; i<ca.length; i++){
       var c = ca[i].trim();
-      if (c.indexOf(name)==0) return c.substring(name.length,c.length);
-   }
-   return "";
-}
+      if(c.indexOf(name)===0) return c.substring(name.length,c.length);
+    }
+    return "";
+  }
+  function setCookie(cname,cvalue,exdays){
+    var d = new Date();
+    d.setTime(d.getTime()+(exdays*24*60*60*1000));
+    var expires = "expires="+d.toGMTString();
+    document.cookie = cname + "=" + cvalue + "; " + expires;
+  }
 
-function setCookie(cname,cvalue,exdays)
-{
-   var d = new Date();
-   d.setTime(d.getTime()+(exdays*24*60*60*1000));
-   var expires = "expires="+d.toGMTString();
-   document.cookie = cname + "=" + cvalue + "; " + expires;
-}
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 
-function showSplash()
-{
-   currentstate = states.SplashScreen;
+  // =====================
+  // Init
+  // =====================
+  $(function(){
+    if(window.location.search === "?debug") debugmode = true;
+    if(window.location.search === "?easy") pipeGap = 200;
 
-   //set the defaults (again)
-   velocity = 0;
-   position = 180;
-   rotation = 0;
-   score = 0;
+    var savedscore = getCookie("highscore");
+    if(savedscore !== "") highscore = parseInt(savedscore, 10);
 
-   //update the player in preparation for the next game
-   $("#player").css({ y: 0, x: 0 });
-   updatePlayer($("#player"));
+    // one-time CSS hint
+    $player.css({ willChange: 'transform' });
 
-   soundSwoosh.stop();
-   soundSwoosh.play();
+    bindInput();
+    showSplash();
+  });
 
-   //clear out all the pipes if there are any
-   $(".pipe").remove();
-   pipes = new Array();
+  // =====================
+  // Input
+  // =====================
+  function primeAudio(){
+    if(audioPrimed) return;
+    try{ buzz.all().load(); }catch(e){}
+    audioPrimed = true;
+  }
 
-   //make everything animated again
-   $(".animated").css('animation-play-state', 'running');
-   $(".animated").css('-webkit-animation-play-state', 'running');
+  function bindInput(){
+    // Space bar
+    $doc.on('keydown', function(e){
+      if(e.keyCode === 32){
+        if(currentstate === states.ScoreScreen) $replay.click();
+        else screenClick();
+      }
+    });
 
-   //fade in the splash
-   $("#splash").transition({ opacity: 1 }, 2000, 'ease');
-}
+    // Touch / Mouse on fly area only
+    var area = document.getElementById('flyarea');
+    if(area){
+      area.addEventListener('touchstart', function(){ screenClick(); }, { passive: true });
+      area.addEventListener('mousedown', function(){ screenClick(); });
+    }
+  }
 
-function startGame()
-{
-   currentstate = states.GameScreen;
+  function screenClick(){
+    primeAudio();
 
-   //fade out the splash
-   $("#splash").stop();
-   $("#splash").transition({ opacity: 0 }, 500, 'ease');
+    if(currentstate === states.GameScreen){
+      playerJump();
+    } else if(currentstate === states.SplashScreen){
+      startGame();
+    }
+  }
 
-   //update the big score
-   setBigScore();
+  function playerJump(){
+    velocity = jump;
+    try { soundJump.play(); } catch(e){}
+  }
 
-   //debug mode?
-   if(debugmode)
-   {
-      //show the bounding boxes
-      $(".boundingbox").show();
-   }
+  // =====================
+  // Screens
+  // =====================
+  function showSplash(){
+    currentstate = states.SplashScreen;
 
-   //start up our loops
-   var updaterate = 1000.0 / 60.0 ; //60 times a second
-   loopGameloop = setInterval(gameloop, updaterate);
-   loopPipeloop = setInterval(updatePipes, 1400);
+    // reset player
+    velocity = 0; positionY = 180; rotation = 0; score = 0;
 
-   //jump from the start!
-   playerJump();
-}
+    // clear pipes
+    for(var i=0;i<pipes.length;i++) pipes[i].el.remove();
+    pipes.length = 0;
 
-function updatePlayer(player)
-{
-   //rotation
-   rotation = Math.min((velocity / 10) * 90, 90);
+    // resume any CSS background animations
+    $('.animated').css('animation-play-state', 'running')
+                  .css('-webkit-animation-play-state', 'running');
 
-   //apply rotation and position
-   $(player).css({ rotate: rotation, top: position });
-}
+    // place player
+    updatePlayerTransform();
 
-function gameloop() {
-   var player = $("#player");
+    try { soundSwoosh.stop(); soundSwoosh.play(); } catch(e){}
 
-   //update the player speed/position
-   velocity += gravity;
-   position += velocity;
+    // splash fade in
+    $splash.stop().transition({ opacity: 1 }, 2000, 'ease');
+  }
 
-   //update the player
-   updatePlayer(player);
+  function startGame(){
+    currentstate = states.GameScreen;
 
-   //create the bounding box
-   var box = document.getElementById('player').getBoundingClientRect();
-   var origwidth = 34.0;
-   var origheight = 24.0;
+    // Resolve dimensions once per round
+    flyAreaHeight = $flyArea.height();
+    flyAreaWidth  = $flyArea.width();
+    landTop = $land.offset().top - $flyArea.offset().top; // relative to flyarea
+    ceilingBottom = ($ceiling.offset().top - $flyArea.offset().top) + $ceiling.height();
 
-   var boxwidth = origwidth - (Math.sin(Math.abs(rotation) / 90) * 8);
-   var boxheight = (origheight + box.height) / 2;
-   var boxleft = ((box.width - boxwidth) / 2) + box.left;
-   var boxtop = ((box.height - boxheight) / 2) + box.top;
-   var boxright = boxleft + boxwidth;
-   var boxbottom = boxtop + boxheight;
+    // Reset state
+    score = 0; setBigScore();
+    spawnAccumulator = 0; lastTS = 0;
 
-   //if we're in debug mode, draw the bounding box
-   if(debugmode)
-   {
-      var boundingbox = $("#playerbox");
-      boundingbox.css('left', boxleft);
-      boundingbox.css('top', boxtop);
-      boundingbox.css('height', boxheight);
-      boundingbox.css('width', boxwidth);
-   }
+    // UI
+    $splash.stop().transition({ opacity: 0 }, 500, 'ease');
+    if(debugmode) $('.boundingbox').show();
 
-   //did we hit the ground?
-   if(box.bottom >= $("#land").offset().top)
-   {
+    // Start loop
+    startRaf();
+
+    // first jump
+    playerJump();
+  }
+
+  // =====================
+  // Main Loop (rAF)
+  // =====================
+  function startRaf(){
+    stopRaf();
+    rafId = requestAnimationFrame(tick);
+  }
+  function stopRaf(){
+    if(rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  function tick(ts){
+    if(!lastTS) lastTS = ts;
+    var dt = (ts - lastTS) / 1000; // seconds
+    lastTS = ts;
+
+    gameloop(dt);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function gameloop(dt){
+    // Physics update
+    velocity += gravity;
+    positionY += velocity;
+
+    // Clamp to ceiling
+    if(positionY <= 0 || (positionY <= (ceilingBottom - PLAYER_HEIGHT))){
+      positionY = Math.max(0, positionY);
+    }
+
+    // Update player rotation & transform
+    rotation = Math.min((velocity / 10) * 90, 90);
+    updatePlayerTransform();
+
+    // Spawn pipes
+    spawnAccumulator += dt * 1000;
+    if(spawnAccumulator >= spawnInterval){
+      spawnAccumulator -= spawnInterval;
+      createPipe();
+    }
+
+    // Move pipes & handle scoring
+    updatePipes(dt);
+
+    // Collision with ground
+    var playerBottom = positionY + PLAYER_HEIGHT;
+    if(playerBottom >= landTop){
       playerDead();
       return;
-   }
+    }
 
-   //have they tried to escape through the ceiling? :o
-   var ceiling = $("#ceiling");
-   if(boxtop <= (ceiling.offset().top + ceiling.height()))
-      position = 0;
+    // Debug boxes
+    if(debugmode) updateDebugBoxes();
+  }
 
-   //we can't go any further without a pipe
-   if(pipes[0] == null)
-      return;
+  // =====================
+  // Rendering
+  // =====================
+  function updatePlayerTransform(){
+    var t = 'translate3d(' + playerX + 'px,' + positionY + 'px,0) rotate(' + rotation + 'deg)';
+    $player.css({ transform: t, webkitTransform: t, top: 0, left: 0 });
+  }
 
-   //determine the bounding box of the next pipes inner area
-   var nextpipe = pipes[0];
-   var nextpipeupper = nextpipe.children(".pipe_upper");
+  function updateDebugBoxes(){
+    // Player debug box approximation similar to original logic
+    var boxwidth = PLAYER_WIDTH - (Math.sin(Math.abs(rotation) * Math.PI / 180) * 8);
+    var boxheight = (PLAYER_HEIGHT + PLAYER_HEIGHT) / 2; // simple approx
+    var boxleft = playerX + (PLAYER_WIDTH - boxwidth) / 2;
+    var boxtop = positionY + (PLAYER_HEIGHT - boxheight) / 2;
 
-   var pipetop = nextpipeupper.offset().top + nextpipeupper.height();
-   var pipeleft = nextpipeupper.offset().left - 2; // for some reason it starts at the inner pipes offset, not the outer pipes.
-   var piperight = pipeleft + pipewidth;
-   var pipebottom = pipetop + pipeheight;
+    var $pbox = $('#playerbox');
+    $pbox.css({ left: boxleft + 'px', top: boxtop + 'px', width: boxwidth + 'px', height: boxheight + 'px' });
 
-   if(debugmode)
-   {
-      var boundingbox = $("#pipebox");
-      boundingbox.css('left', pipeleft);
-      boundingbox.css('top', pipetop);
-      boundingbox.css('height', pipeheight);
-      boundingbox.css('width', pipewidth);
-   }
+    if(pipes.length){
+      var np = pipes[0];
+      var $pipebox = $('#pipebox');
+      $pipebox.css({ left: (np.x) + 'px', top: np.gapTop + 'px', width: pipeWidth + 'px', height: pipeGap + 'px' });
+    }
+  }
 
-   //have we gotten inside the pipe yet?
-   if(boxright > pipeleft)
-   {
-      //we're within the pipe, have we passed between upper and lower pipes?
-      if(boxtop > pipetop && boxbottom < pipebottom)
-      {
-         //yeah! we're within bounds
+  // =====================
+  // Pipes
+  // =====================
+  function createPipe(){
+    // Compute gap position logically (respect padding)
+    var constraint = flyAreaHeight - pipeGap - (pipePadding * 2);
+    var topheight = Math.floor((Math.random() * constraint) + pipePadding);
 
+    // Build DOM (do NOT add class 'animated' to avoid CSS movement)
+    var $pipe = $('<div class="pipe"></div>');
+    var $upper = $('<div class="pipe_upper"></div>').css('height', topheight + 'px');
+    var bottomheight = (flyAreaHeight - pipeGap) - topheight;
+    var $lower = $('<div class="pipe_lower"></div>').css('height', bottomheight + 'px');
+    $pipe.append($upper).append($lower);
+
+    // Place at right edge
+    var startX = flyAreaWidth; // just outside view
+    $pipe.css({ transform: 'translate3d(' + startX + 'px,0,0)' });
+    $flyArea.append($pipe);
+
+    pipes.push({ el: $pipe, x: startX, gapTop: topheight, scored: false });
+  }
+
+  function updatePipes(dt){
+    if(!pipes.length) return;
+
+    var dx = pipeSpeed * dt; // distance this frame
+
+    for(var i=0; i<pipes.length; i++){
+      var p = pipes[i];
+      p.x -= dx;
+      p.el.css({ transform: 'translate3d(' + p.x + 'px,0,0)' });
+
+      // Scoring: when player passes pipe right edge
+      if(!p.scored && (playerX > (p.x + pipeWidth))){
+        p.scored = true;
+        playerScore();
       }
-      else
-      {
-         //no! we touched the pipe
-         playerDead();
-         return;
+
+      // Collision check when overlapping horizontally
+      var playerLeft = playerX;
+      var playerRight = playerX + PLAYER_WIDTH;
+      var pipeLeft = p.x;
+      var pipeRight = p.x + pipeWidth;
+      if(playerRight > pipeLeft && playerLeft < pipeRight){
+        // Inside pipe's x-range: check y against gap
+        var boxwidth = PLAYER_WIDTH - (Math.sin(Math.abs(rotation) * Math.PI / 180) * 8);
+        var boxheight = (PLAYER_HEIGHT + PLAYER_HEIGHT) / 2;
+        var boxleft = playerX + (PLAYER_WIDTH - boxwidth) / 2;
+        var boxtop = positionY + (PLAYER_HEIGHT - boxheight) / 2;
+        var boxbottom = boxtop + boxheight;
+        var pipetop = p.gapTop;
+        var pipebottom = p.gapTop + pipeGap;
+
+        if(!(boxtop > pipetop && boxbottom < pipebottom)){
+          // Hit the pipe
+          playerDead();
+          return;
+        }
       }
-   }
+    }
 
+    // Remove off-screen pipes
+    while(pipes.length && pipes[0].x <= -pipeWidth - 100){
+      pipes[0].el.remove();
+      pipes.shift();
+    }
+  }
 
-   //have we passed the imminent danger?
-   if(boxleft > piperight)
-   {
-      //yes, remove it
-      pipes.splice(0, 1);
-
-      //and score a point
-      playerScore();
-   }
-}
-
-//Handle space bar
-$(document).keydown(function(e){
-   //space bar!
-   if(e.keyCode == 32)
-   {
-      //in ScoreScreen, hitting space should click the "replay" button. else it's just a regular spacebar hit
-      if(currentstate == states.ScoreScreen)
-         $("#replay").click();
-      else
-         screenClick();
-   }
-});
-
-//Handle mouse down OR touch start
-if("ontouchstart" in window)
-   $(document).on("touchstart", screenClick);
-else
-   $(document).on("mousedown", screenClick);
-
-function screenClick()
-{
-   if(currentstate == states.GameScreen)
-   {
-      playerJump();
-   }
-   else if(currentstate == states.SplashScreen)
-   {
-      startGame();
-   }
-}
-
-function playerJump()
-{
-   velocity = jump;
-   //play jump sound
-   soundJump.stop();
-   soundJump.play();
-}
-
-function setBigScore(erase)
-{
-   var elemscore = $("#bigscore");
-   elemscore.empty();
-
-   if(erase)
-      return;
-
-   var digits = score.toString().split('');
-   for(var i = 0; i < digits.length; i++)
+  // =====================
+  // Score & UI
+  // =====================
+  function setBigScore(erase){
+    var elemscore = $("#bigscore");
+    elemscore.empty();
+    if(erase) return;
+    var digits = score.toString().split('');
+    for(var i=0; i<digits.length; i++)
       elemscore.append("<img src='assets/font_big_" + digits[i] + ".png' alt='" + digits[i] + "'>");
-}
-
-function setSmallScore()
-{
-   var elemscore = $("#currentscore");
-   elemscore.empty();
-
-   var digits = score.toString().split('');
-   for(var i = 0; i < digits.length; i++)
+  }
+  function setSmallScore(){
+    var elemscore = $("#currentscore");
+    elemscore.empty();
+    var digits = score.toString().split('');
+    for(var i=0; i<digits.length; i++)
       elemscore.append("<img src='assets/font_small_" + digits[i] + ".png' alt='" + digits[i] + "'>");
-}
-
-function setHighScore()
-{
-   var elemscore = $("#highscore");
-   elemscore.empty();
-
-   var digits = highscore.toString().split('');
-   for(var i = 0; i < digits.length; i++)
+  }
+  function setHighScore(){
+    var elemscore = $("#highscore");
+    elemscore.empty();
+    var digits = highscore.toString().split('');
+    for(var i=0; i<digits.length; i++)
       elemscore.append("<img src='assets/font_small_" + digits[i] + ".png' alt='" + digits[i] + "'>");
-}
+  }
+  function setMedal(){
+    var elemmedal = $("#medal");
+    elemmedal.empty();
+    if(score < 10) return false;
+    var medal = 'bronze';
+    if(score >= 40) medal = 'platinum';
+    else if(score >= 30) medal = 'gold';
+    else if(score >= 20) medal = 'silver';
+    elemmedal.append('<img src="assets/medal_' + medal + '.png" alt="' + medal + '">');
+    return true;
+  }
 
-function setMedal()
-{
-   var elemmedal = $("#medal");
-   elemmedal.empty();
+  function playerScore(){
+    score += 1;
+    try { soundScore.play(); } catch(e){}
+    setBigScore();
+  }
 
-   if(score < 10)
-      //signal that no medal has been won
-      return false;
+  function playerDead(){
+    // Pause CSS background animations
+    $('.animated').css('animation-play-state', 'paused')
+                  .css('-webkit-animation-play-state', 'paused');
 
-   if(score >= 10)
-      medal = "bronze";
-   if(score >= 20)
-      medal = "silver";
-   if(score >= 30)
-      medal = "gold";
-   if(score >= 40)
-      medal = "platinum";
+    // Enter score screen (disables further input to jump)
+    currentstate = states.ScoreScreen;
 
-   elemmedal.append('<img src="assets/medal_' + medal +'.png" alt="' + medal +'">');
+    // Stop loops
+    stopRaf();
 
-   //signal that a medal has been won
-   return true;
-}
+    // Drop the bird visually to the floor (use transform transition)
+    var playerBottom = positionY + PLAYER_HEIGHT;
+    var floor = flyAreaHeight; // relative to container
+    var movey = Math.max(0, landTop - playerBottom);
+    var targetY = positionY + movey;
 
-function playerDead()
-{
-   //stop animating everything!
-   $(".animated").css('animation-play-state', 'paused');
-   $(".animated").css('-webkit-animation-play-state', 'paused');
+    $player.css({
+      transition: 'transform 1s cubic-bezier(.645,.045,.355,1)',
+      webkitTransition: 'transform 1s cubic-bezier(.645,.045,.355,1)'
+    });
+    var t = 'translate3d(' + playerX + 'px,' + targetY + 'px,0) rotate(90deg)';
+    $player.css({ transform: t, webkitTransform: t });
 
-   //drop the bird to the floor
-   var playerbottom = $("#player").position().top + $("#player").width(); //we use width because he'll be rotated 90 deg
-   var floor = flyArea;
-   var movey = Math.max(0, floor - playerbottom);
-   $("#player").transition({ y: movey + 'px', rotate: 90}, 1000, 'easeInOutCubic');
-
-   //it's time to change states. as of now we're considered ScoreScreen to disable left click/flying
-   currentstate = states.ScoreScreen;
-
-   //destroy our gameloops
-   clearInterval(loopGameloop);
-   clearInterval(loopPipeloop);
-   loopGameloop = null;
-   loopPipeloop = null;
-
-   //mobile browsers don't support buzz bindOnce event
-   if(isIncompatible.any())
-   {
-      //skip right to showing score
+    // Play sounds then show score
+    if(isIncompatible.any()){
       showScore();
-   }
-   else
-   {
-      //play the hit sound (then the dead sound) and then show score
-      soundHit.play().bindOnce("ended", function() {
-         soundDie.play().bindOnce("ended", function() {
-            showScore();
-         });
-      });
-   }
-}
+    } else {
+      try {
+        soundHit.play().bindOnce('ended', function(){
+          soundDie.play().bindOnce('ended', function(){ showScore(); });
+        });
+      } catch(e){ showScore(); }
+    }
+  }
 
-function showScore()
-{
-   //unhide us
-   $("#scoreboard").css("display", "block");
+  function showScore(){
+    // Unhide scoreboard
+    $scoreboard.css('display','block');
 
-   //remove the big score
-   setBigScore(true);
+    // Remove big score
+    setBigScore(true);
 
-   //have they beaten their high score?
-   if(score > highscore)
-   {
-      //yeah!
+    if(score > highscore){
       highscore = score;
-      //save it!
-      setCookie("highscore", highscore, 999);
-   }
+      setCookie('highscore', highscore, 999);
+    }
 
-   //update the scoreboard
-   setSmallScore();
-   setHighScore();
-   var wonmedal = setMedal();
+    setSmallScore();
+    setHighScore();
 
-   //SWOOSH!
-   soundSwoosh.stop();
-   soundSwoosh.play();
+    var wonmedal = setMedal();
 
-   //show the scoreboard
-   $("#scoreboard").css({ y: '40px', opacity: 0 }); //move it down so we can slide it up
-   $("#replay").css({ y: '40px', opacity: 0 });
-   $("#scoreboard").transition({ y: '0px', opacity: 1}, 600, 'ease', function() {
-      //When the animation is done, animate in the replay button and SWOOSH!
-      soundSwoosh.stop();
-      soundSwoosh.play();
-      $("#replay").transition({ y: '0px', opacity: 1}, 600, 'ease');
+    try { soundSwoosh.stop(); soundSwoosh.play(); } catch(e){}
 
-      //also animate in the MEDAL! WOO!
-      if(wonmedal)
-      {
-         $("#medal").css({ scale: 2, opacity: 0 });
-         $("#medal").transition({ opacity: 1, scale: 1 }, 1200, 'ease');
+    $scoreboard.css({ y: '40px', opacity: 0 });
+    $replay.css({ y: '40px', opacity: 0 });
+
+    $scoreboard.transition({ y: '0px', opacity: 1 }, 600, 'ease', function(){
+      try { soundSwoosh.stop(); soundSwoosh.play(); } catch(e){}
+      $replay.transition({ y: '0px', opacity: 1 }, 600, 'ease');
+      if(wonmedal){
+        $('#medal').css({ scale: 2, opacity: 0 })
+                   .transition({ opacity: 1, scale: 1 }, 1200, 'ease');
       }
-   });
+    });
 
-   //make the replay button clickable
-   replayclickable = true;
-}
+    replayclickable = true;
+  }
 
-$("#replay").click(function() {
-   //make sure we can only click once
-   if(!replayclickable)
-      return;
-   else
-      replayclickable = false;
-   //SWOOSH!
-   soundSwoosh.stop();
-   soundSwoosh.play();
+  $replay.on('click', function(){
+    if(!replayclickable) return;
+    replayclickable = false;
 
-   //fade out the scoreboard
-   $("#scoreboard").transition({ y: '-40px', opacity: 0}, 1000, 'ease', function() {
-      //when that's done, display us back to nothing
-      $("#scoreboard").css("display", "none");
+    try { soundSwoosh.stop(); soundSwoosh.play(); } catch(e){}
 
-      //start the game over!
+    $scoreboard.transition({ y: '-40px', opacity: 0 }, 1000, 'ease', function(){
+      $scoreboard.css('display','none');
+      // Reset transition on player for next round
+      $player.css({ transition: '', webkitTransition: '' });
       showSplash();
-   });
-});
+    });
+  });
 
-function playerScore()
-{
-   score += 1;
-   //play score sound
-   soundScore.stop();
-   soundScore.play();
-   setBigScore();
-}
+  // =====================
+  // Compatibility checks (keep original API)
+  // =====================
+  var isIncompatible = {
+    Android: function(){ return navigator.userAgent.match(/Android/i); },
+    BlackBerry: function(){ return navigator.userAgent.match(/BlackBerry/i); },
+    iOS: function(){ return navigator.userAgent.match(/iPhone|iPad|iPod/i); },
+    Opera: function(){ return navigator.userAgent.match(/Opera Mini/i); },
+    Safari: function(){ return (navigator.userAgent.match(/OS X.*Safari/) && !navigator.userAgent.match(/Chrome/)); },
+    Windows: function(){ return navigator.userAgent.match(/IEMobile/i); },
+    any: function(){
+      return (this.Android() || this.BlackBerry() || this.iOS() || this.Opera() || this.Safari() || this.Windows());
+    }
+  };
 
-function updatePipes()
-{
-   //Do any pipes need removal?
-   $(".pipe").filter(function() { return $(this).position().left <= -100; }).remove()
-
-   //add a new pipe (top height + bottom height  + pipeheight == flyArea) and put it in our tracker
-   var padding = 80;
-   var constraint = flyArea - pipeheight - (padding * 2); //double padding (for top and bottom)
-   var topheight = Math.floor((Math.random()*constraint) + padding); //add lower padding
-   var bottomheight = (flyArea - pipeheight) - topheight;
-   var newpipe = $('<div class="pipe animated"><div class="pipe_upper" style="height: ' + topheight + 'px;"></div><div class="pipe_lower" style="height: ' + bottomheight + 'px;"></div></div>');
-   $("#flyarea").append(newpipe);
-   pipes.push(newpipe);
-}
-
-var isIncompatible = {
-   Android: function() {
-   return navigator.userAgent.match(/Android/i);
-   },
-   BlackBerry: function() {
-   return navigator.userAgent.match(/BlackBerry/i);
-   },
-   iOS: function() {
-   return navigator.userAgent.match(/iPhone|iPad|iPod/i);
-   },
-   Opera: function() {
-   return navigator.userAgent.match(/Opera Mini/i);
-   },
-   Safari: function() {
-   return (navigator.userAgent.match(/OS X.*Safari/) && ! navigator.userAgent.match(/Chrome/));
-   },
-   Windows: function() {
-   return navigator.userAgent.match(/IEMobile/i);
-   },
-   any: function() {
-   return (isIncompatible.Android() || isIncompatible.BlackBerry() || isIncompatible.iOS() || isIncompatible.Opera() || isIncompatible.Safari() || isIncompatible.Windows());
-   }
-};
+})();
