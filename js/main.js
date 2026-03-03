@@ -18,7 +18,7 @@ var flyArea = $("#flyarea").height();
 var score = 0;
 var highscore = 0;
 
-var pipeheight = 100;
+var pipeheight = 200;
 var pipewidth = 52;
 var pipes = new Array();
 
