@@ -45,7 +45,6 @@ var pipeIntervalFrames = 90; // ~1.5s @60fps
 $(document).ready(function () {
 
    flyArea = $("#flyarea").height();
-   landTop = $("#land").position().top;
 
    var savedscore = getCookie("highscore");
    if (savedscore != "")
@@ -151,8 +150,10 @@ function updatePhysics() {
    updatePlayer();
 
    // Ground
-   if (position >= landTop - 24) {
-      position = landTop - 24;
+   var groundLimit = flyArea - 24;
+   
+   if (position >= groundLimit) {
+      position = groundLimit;
       playerDead();
    }
 
