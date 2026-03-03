@@ -101,125 +101,92 @@ function showSplash()
    $("#splash").transition({ opacity: 1 }, 2000, 'ease');
 }
 
-function startGame()
-{
+function startGame() {
    currentstate = states.GameScreen;
-
-   //fade out the splash
-   $("#splash").stop();
-   $("#splash").transition({ opacity: 0 }, 500, 'ease');
-
-   //update the big score
+   $("#splash").stop().transition({ opacity: 0 }, 500, 'ease');
    setBigScore();
 
-   //debug mode?
-   if(debugmode)
-   {
-      //show the bounding boxes
-      $(".boundingbox").show();
-   }
-
-   //start up our loops
-   var updaterate = 1000.0 / 60.0 ; //60 times a second
-   loopGameloop = setInterval(gameloop, updaterate);
+   // Khởi tạo vòng lặp mượt mà thay cho setInterval
+   loopGameloop = window.requestAnimationFrame(gameloop);
    loopPipeloop = setInterval(updatePipes, 1400);
 
-   //jump from the start!
    playerJump();
 }
 
 function updatePlayer(player)
 {
-   //rotation
+   // Tính toán góc quay dựa trên vận tốc
    rotation = Math.min((velocity / 10) * 90, 90);
 
-   //apply rotation and position
-   $(player).css({ rotate: rotation, top: position });
+   // TỐI ƯU: Dùng transform3d để mượt hơn trên iOS
+   $(player).css({ 
+      'transform': 'translate3d(0, ' + position + 'px, 0) rotate(' + rotation + 'deg)',
+      'top': 0 
+   });
 }
 
 function gameloop() {
    var player = $("#player");
 
-   //update the player speed/position
+   // Cập nhật vật lý rơi tự do
    velocity += gravity;
    position += velocity;
 
-   //update the player
+   // Cập nhật vị trí chim lên màn hình
    updatePlayer(player);
 
-   //create the bounding box
-   var box = document.getElementById('player').getBoundingClientRect();
-   var origwidth = 34.0;
-   var origheight = 24.0;
-
-   var boxwidth = origwidth - (Math.sin(Math.abs(rotation) / 90) * 8);
-   var boxheight = (origheight + box.height) / 2;
-   var boxleft = ((box.width - boxwidth) / 2) + box.left;
-   var boxtop = ((box.height - boxheight) / 2) + box.top;
-   var boxright = boxleft + boxwidth;
-   var boxbottom = boxtop + boxheight;
-
-   //if we're in debug mode, draw the bounding box
-   if(debugmode)
-   {
-      var boundingbox = $("#playerbox");
-      boundingbox.css('left', boxleft);
-      boundingbox.css('top', boxtop);
-      boundingbox.css('height', boxheight);
-      boundingbox.css('width', boxwidth);
-   }
-
-   //did we hit the ground?
-   if(box.bottom >= $("#land").offset().top)
+   // TỐI ƯU: Kiểm tra va chạm đất bằng biến số thay vì đo DOM
+   if(position + 24 >= $("#land").offset().top) // 24 là chiều cao chim
    {
       playerDead();
       return;
    }
 
-   //have they tried to escape through the ceiling? :o
-   var ceiling = $("#ceiling");
-   if(boxtop <= (ceiling.offset().top + ceiling.height()))
+   // Chống bay quá trần
+   if(position <= 0)
       position = 0;
 
-   //we can't go any further without a pipe
-   if(pipes[0] == null)
+   // Nếu chưa có ống thì bỏ qua phần dưới
+   if(pipes[0] == null) {
+      // Tiếp tục vòng lặp nếu đang chơi
+      if(currentstate == states.GameScreen)
+         loopGameloop = window.requestAnimationFrame(gameloop);
       return;
+   }
 
-   //determine the bounding box of the next pipes inner area
+   // Kiểm tra va chạm với ống
    var nextpipe = pipes[0];
    var nextpipeupper = nextpipe.children(".pipe_upper");
 
    var pipetop = nextpipeupper.offset().top + nextpipeupper.height();
-   var pipeleft = nextpipeupper.offset().left - 2; // for some reason it starts at the inner pipes offset, not the outer pipes.
+   var pipeleft = nextpipeupper.offset().left - 2;
    var piperight = pipeleft + pipewidth;
    var pipebottom = pipetop + pipeheight;
 
-   if(debugmode)
-   {
-      var boundingbox = $("#pipebox");
-      boundingbox.css('left', pipeleft);
-      boundingbox.css('top', pipetop);
-      boundingbox.css('height', pipeheight);
-      boundingbox.css('width', pipewidth);
-   }
+   var birdRight = 50 + 34; // 50 là tọa độ left mặc định, 34 là chiều rộng chim
+   var birdLeft = 50;
 
-   //have we gotten inside the pipe yet?
-   if(boxright > pipeleft)
+   if(birdRight > pipeleft)
    {
-      //we're within the pipe, have we passed between upper and lower pipes?
-      if(boxtop > pipetop && boxbottom < pipebottom)
+      // Nếu chim không nằm giữa khoảng trống của 2 ống -> Chết
+      if(!(position > pipetop && (position + 24) < pipebottom))
       {
-         //yeah! we're within bounds
-
-      }
-      else
-      {
-         //no! we touched the pipe
          playerDead();
          return;
       }
    }
 
+   // Qua ống thành công
+   if(birdLeft > piperight)
+   {
+      pipes.splice(0, 1);
+      playerScore();
+   }
+
+   // QUAN TRỌNG: Gọi khung hình tiếp theo để mượt như nhung
+   if(currentstate == states.GameScreen)
+      loopGameloop = window.requestAnimationFrame(gameloop);
+}
 
    //have we passed the imminent danger?
    if(boxleft > piperight)
@@ -328,36 +295,28 @@ function setMedal()
    return true;
 }
 
-function playerDead()
-{
-   //stop animating everything!
+function playerDead() {
+   // Ngừng tất cả hiệu ứng CSS
    $(".animated").css('animation-play-state', 'paused');
    $(".animated").css('-webkit-animation-play-state', 'paused');
 
-   //drop the bird to the floor
-   var playerbottom = $("#player").position().top + $("#player").width(); //we use width because he'll be rotated 90 deg
-   var floor = flyArea;
-   var movey = Math.max(0, floor - playerbottom);
+   // Rơi xuống đất khi chết
+   var playerbottom = position + 24;
+   var movey = Math.max(0, 420 - playerbottom);
    $("#player").transition({ y: movey + 'px', rotate: 90}, 1000, 'easeInOutCubic');
 
-   //it's time to change states. as of now we're considered ScoreScreen to disable left click/flying
    currentstate = states.ScoreScreen;
 
-   //destroy our gameloops
-   clearInterval(loopGameloop);
+   // TỐI ƯU: Dừng vòng lặp requestAnimationFrame
+   window.cancelAnimationFrame(loopGameloop);
    clearInterval(loopPipeloop);
+   
    loopGameloop = null;
    loopPipeloop = null;
 
-   //mobile browsers don't support buzz bindOnce event
-   if(isIncompatible.any())
-   {
-      //skip right to showing score
+   if (isIncompatible.any()) {
       showScore();
-   }
-   else
-   {
-      //play the hit sound (then the dead sound) and then show score
+   } else {
       soundHit.play().bindOnce("ended", function() {
          soundDie.play().bindOnce("ended", function() {
             showScore();
