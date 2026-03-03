@@ -372,3 +372,7 @@ Screen - Game
    text-decoration: none;
    color: #fff;
 }
+#player {
+    will-change: transform;
+    transform: translate3d(0,0,0);
+}
