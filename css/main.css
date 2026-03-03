@@ -302,16 +302,12 @@ Screen - Game
    animation: animBird 300ms steps(4) infinite;
 }
 
-.pipe
-{
+.pipe {
    position: absolute;
-   left: -100px;
+   left: 0;
    width: 52px;
    height: 100%;
    z-index: 10;
-
-   -webkit-animation: animPipe 7500ms linear;
-   animation: animPipe 7500ms linear;
 }
 
 .pipe_upper
