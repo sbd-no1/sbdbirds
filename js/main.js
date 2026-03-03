@@ -130,11 +130,14 @@ function startGame()
 
 function updatePlayer(player)
 {
-   //rotation
+   // Tính toán góc quay (giữ nguyên)
    rotation = Math.min((velocity / 10) * 90, 90);
 
-   //apply rotation and position
-   $(player).css({ rotate: rotation, top: position });
+   // SỬA ĐOẠN NÀY: Dùng translate3d để iPhone dùng GPU xử lý
+   $(player).css({
+      'transform': 'translate3d(0, ' + position + 'px, 0) rotate(' + rotation + 'deg)',
+      'top': 0 // Quan trọng: Đặt top về 0 để không bị cộng dồn vị trí
+   });
 }
 
 function gameloop() {
