@@ -120,21 +120,26 @@ function startGame()
    }
 
    //start up our loops
-   var updaterate = 1000.0 / 60.0 ; //60 times a second
-   loopGameloop = setInterval(gameloop, updaterate);
+   loopGameloop = requestAnimationFrame(gameLoopRAF);;
    loopPipeloop = setInterval(updatePipes, 1400);
 
    //jump from the start!
    playerJump();
 }
-
+function gameLoopRAF() {
+   gameloop();
+   loopGameloop = requestAnimationFrame(gameLoopRAF);
+}
 function updatePlayer(player)
 {
    //rotation
    rotation = Math.min((velocity / 10) * 90, 90);
 
    //apply rotation and position
-   $(player).css({ rotate: rotation, top: position });
+   $(player).css({
+   transform: "translateY(" + position + "px) rotate(" + rotation + "deg)",
+   willChange: "transform"
+});
 }
 
 function gameloop() {
@@ -170,7 +175,7 @@ function gameloop() {
    }
 
    //did we hit the ground?
-   if(box.bottom >= $("#land").offset().top)
+   if(position >= flyArea - 24)
    {
       playerDead();
       return;
@@ -344,7 +349,7 @@ function playerDead()
    currentstate = states.ScoreScreen;
 
    //destroy our gameloops
-   clearInterval(loopGameloop);
+   cancelAnimationFrame(loopGameloop);
    clearInterval(loopPipeloop);
    loopGameloop = null;
    loopPipeloop = null;
