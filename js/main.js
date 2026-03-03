@@ -371,7 +371,6 @@ function playerDead()
    clearInterval(loopPipeloop);
    loopPipeloop = null;
    }
-   ``
 
 
    //mobile browsers don't support buzz bindOnce event
