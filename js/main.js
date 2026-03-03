@@ -1,65 +1,106 @@
-var states = Object.freeze({
-    Splash: 0,
-    Playing: 1,
-    Score: 2
-});
+// =====================
+// STATE
+// =====================
+const STATE = {
+    SPLASH: 0,
+    PLAYING: 1,
+    SCORE: 2
+};
 
-var currentState = states.Splash;
+let currentState = STATE.SPLASH;
 
-var gravity = 0.25;
-var jumpPower = -4.6;
-var velocity = 0;
-var positionY = 180;
-var rotation = 0;
+// =====================
+// GAME VAR
+// =====================
+let gravity = 0.25;
+let jumpPower = -4.6;
+let velocity = 0;
+let positionY = 180;
+let rotation = 0;
 
-var flyAreaHeight;
-var birdHeight;
-var birdWidth;
+let flyAreaHeight;
+let flyAreaWidth;
 
-var pipes = [];
-var pipeGap = 110;
-var pipeWidth = 52;
-var pipeSpeed = 2;
+let birdHeight;
+let birdWidth;
+let birdX;
 
-var score = 0;
-var highscore = 0;
+let pipes = [];
+let pipeGap = 110;
+let pipeWidth = 52;
+let pipeSpeed = 2;
 
-var animationId = null;
-var pipeSpawnTimer = 0;
-var pipeSpawnDelay = 90; // ~1.5s @60fps
+let score = 0;
 
-// ===== SOUNDS =====
-var soundJump = new buzz.sound("assets/sounds/sfx_wing.ogg");
-var soundScore = new buzz.sound("assets/sounds/sfx_point.ogg");
-var soundHit = new buzz.sound("assets/sounds/sfx_hit.ogg");
-var soundDie = new buzz.sound("assets/sounds/sfx_die.ogg");
-var soundSwoosh = new buzz.sound("assets/sounds/sfx_swooshing.ogg");
+let animationId = null;
+let pipeTimer = 0;
+let pipeSpawnDelay = 90; // ~1.5s
 
-// =====================================
+// =====================
+// SOUND
+// =====================
+let soundJump = new buzz.sound("assets/sounds/sfx_wing.ogg");
+let soundScore = new buzz.sound("assets/sounds/sfx_point.ogg");
+let soundHit = new buzz.sound("assets/sounds/sfx_hit.ogg");
+let soundDie = new buzz.sound("assets/sounds/sfx_die.ogg");
+let soundSwoosh = new buzz.sound("assets/sounds/sfx_swooshing.ogg");
 
+// =====================
+// INIT
+// =====================
 $(document).ready(function () {
 
     flyAreaHeight = $("#flyarea").height();
+    flyAreaWidth = $("#flyarea").width();
+
     birdHeight = $("#player").height();
     birdWidth = $("#player").width();
+    birdX = $("#player").position().left;
 
+    bindInput();
     showSplash();
-
-    $(document).on("keydown", function (e) {
-        if (e.keyCode === 32) handleInput();
-    });
-
-    if ("ontouchstart" in window)
-        $(document).on("touchstart", handleInput);
-    else
-        $(document).on("mousedown", handleInput);
 });
 
-// =====================================
+// =====================
+// INPUT (ỔN ĐỊNH iOS)
+// =====================
+function bindInput() {
 
+    const fly = document.getElementById("flyarea");
+
+    fly.addEventListener("touchstart", function (e) {
+        e.preventDefault();
+        handleInput();
+    }, { passive: false });
+
+    fly.addEventListener("mousedown", function () {
+        handleInput();
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.code === "Space") handleInput();
+    });
+}
+
+function handleInput() {
+
+    if (currentState === STATE.SPLASH) {
+        startGame();
+    }
+    else if (currentState === STATE.PLAYING) {
+        jump();
+    }
+    else if (currentState === STATE.SCORE) {
+        showSplash();
+    }
+}
+
+// =====================
+// SPLASH
+// =====================
 function showSplash() {
 
-    currentState = states.Splash;
+    currentState = STATE.SPLASH;
 
     velocity = 0;
     positionY = 180;
@@ -71,19 +112,20 @@ function showSplash() {
 
     updateBird();
 
-    $("#splash").css("opacity", 1);
     $("#scoreboard").hide();
+    $("#splash").css("opacity", 1);
 }
 
-// =====================================
-
+// =====================
+// START
+// =====================
 function startGame() {
 
-    currentState = states.Playing;
+    currentState = STATE.PLAYING;
 
     $("#splash").css("opacity", 0);
 
-    pipeSpawnTimer = 0;
+    pipeTimer = 0;
 
     cancelAnimationFrame(animationId);
     animationId = requestAnimationFrame(gameLoop);
@@ -91,11 +133,12 @@ function startGame() {
     jump();
 }
 
-// =====================================
-
+// =====================
+// LOOP
+// =====================
 function gameLoop() {
 
-    if (currentState !== states.Playing) return;
+    if (currentState !== STATE.PLAYING) return;
 
     updatePhysics();
     updatePipes();
@@ -104,8 +147,9 @@ function gameLoop() {
     animationId = requestAnimationFrame(gameLoop);
 }
 
-// =====================================
-
+// =====================
+// PHYSICS
+// =====================
 function updatePhysics() {
 
     velocity += gravity;
@@ -113,7 +157,7 @@ function updatePhysics() {
 
     rotation = Math.min((velocity / 10) * 90, 90);
 
-    var groundLimit = flyAreaHeight - birdHeight;
+    const groundLimit = flyAreaHeight - birdHeight;
 
     if (positionY >= groundLimit) {
         positionY = groundLimit;
@@ -130,48 +174,46 @@ function updatePhysics() {
 
 // GPU transform
 function updateBird() {
+
     $("#player").css({
-        transform: "translateY(" + positionY + "px) rotate(" + rotation + "deg)",
-        willChange: "transform"
+        transform: "translateY(" + positionY + "px) rotate(" + rotation + "deg)"
     });
 }
 
-// =====================================
-
+// =====================
+// PIPE
+// =====================
 function updatePipes() {
 
-    pipeSpawnTimer++;
+    pipeTimer++;
 
-    if (pipeSpawnTimer > pipeSpawnDelay) {
+    if (pipeTimer > pipeSpawnDelay) {
         spawnPipe();
-        pipeSpawnTimer = 0;
+        pipeTimer = 0;
     }
 
-    for (var i = 0; i < pipes.length; i++) {
+    for (let i = 0; i < pipes.length; i++) {
 
         pipes[i].x -= pipeSpeed;
-
         pipes[i].elem.css("transform", "translateX(" + pipes[i].x + "px)");
 
-        if (!pipes[i].passed && pipes[i].x + pipeWidth < 60) {
+        if (!pipes[i].passed && pipes[i].x + pipeWidth < birdX) {
             pipes[i].passed = true;
             addScore();
         }
     }
 
-    pipes = pipes.filter(p => p.x + pipeWidth > -50);
+    pipes = pipes.filter(p => p.x + pipeWidth > -60);
 }
-
-// =====================================
 
 function spawnPipe() {
 
-    var padding = 80;
-    var constraint = flyAreaHeight - pipeGap - (padding * 2);
-    var topHeight = Math.floor(Math.random() * constraint + padding);
-    var bottomHeight = flyAreaHeight - pipeGap - topHeight;
+    let padding = 80;
+    let constraint = flyAreaHeight - pipeGap - padding * 2;
+    let topHeight = Math.floor(Math.random() * constraint + padding);
+    let bottomHeight = flyAreaHeight - pipeGap - topHeight;
 
-    var pipe = $('<div class="pipe">' +
+    let pipe = $('<div class="pipe">' +
         '<div class="pipe_upper" style="height:' + topHeight + 'px;"></div>' +
         '<div class="pipe_lower" style="height:' + bottomHeight + 'px;"></div>' +
         '</div>');
@@ -180,26 +222,27 @@ function spawnPipe() {
 
     pipes.push({
         elem: pipe,
-        x: $("#flyarea").width(),
+        x: flyAreaWidth,
         top: topHeight,
         bottom: topHeight + pipeGap,
         passed: false
     });
 }
 
-// =====================================
-
+// =====================
+// COLLISION
+// =====================
 function checkCollision() {
 
-    var birdLeft = $("#player").position().left;
-    var birdRight = birdLeft + birdWidth;
-    var birdTop = positionY;
-    var birdBottom = positionY + birdHeight;
+    let birdLeft = birdX;
+    let birdRight = birdX + birdWidth;
+    let birdTop = positionY;
+    let birdBottom = positionY + birdHeight;
 
-    for (var i = 0; i < pipes.length; i++) {
+    for (let i = 0; i < pipes.length; i++) {
 
-        var pipeLeft = pipes[i].x;
-        var pipeRight = pipeLeft + pipeWidth;
+        let pipeLeft = pipes[i].x;
+        let pipeRight = pipeLeft + pipeWidth;
 
         if (birdRight > pipeLeft && birdLeft < pipeRight) {
 
@@ -211,8 +254,9 @@ function checkCollision() {
     }
 }
 
-// =====================================
-
+// =====================
+// SCORE
+// =====================
 function addScore() {
     score++;
     soundScore.stop();
@@ -220,43 +264,30 @@ function addScore() {
     setBigScore();
 }
 
-// =====================================
-
+// =====================
+// DIE
+// =====================
 function die() {
 
-    if (currentState !== states.Playing) return;
+    if (currentState !== STATE.PLAYING) return;
 
-    currentState = states.Score;
+    currentState = STATE.SCORE;
 
     cancelAnimationFrame(animationId);
 
     soundHit.play().bindOnce("ended", function () {
-        soundDie.play().bindOnce("ended", function () {
-            showScore();
-        });
+        soundDie.play();
+        $("#scoreboard").show();
     });
 }
 
-// =====================================
-
-function showScore() {
-
-    $("#scoreboard").show();
-}
-
-// =====================================
-
-function handleInput() {
-
-    if (currentState === states.Splash) {
-        startGame();
-    }
-    else if (currentState === states.Playing) {
-        jump();
-    }
-}
-
+// =====================
+// JUMP
+// =====================
 function jump() {
+
+    if (currentState !== STATE.PLAYING) return;
+
     velocity = jumpPower;
     soundJump.stop();
     soundJump.play();
