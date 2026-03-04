@@ -330,42 +330,24 @@ function setMedal()
 
 function playerDead()
 {
-   //stop animating everything!
    $(".animated").css('animation-play-state', 'paused');
    $(".animated").css('-webkit-animation-play-state', 'paused');
 
-   //drop the bird to the floor
-   var playerbottom = $("#player").position().top + $("#player").width(); //we use width because he'll be rotated 90 deg
+   var playerbottom = $("#player").position().top + $("#player").width();
    var floor = flyArea;
    var movey = Math.max(0, floor - playerbottom);
    $("#player").transition({ y: movey + 'px', rotate: 90}, 1000, 'easeInOutCubic');
 
-   //it's time to change states. as of now we're considered ScoreScreen to disable left click/flying
    currentstate = states.ScoreScreen;
 
-   //destroy our gameloops
    clearInterval(loopGameloop);
    clearInterval(loopPipeloop);
    loopGameloop = null;
    loopPipeloop = null;
 
-   //mobile browsers don't support buzz bindOnce event
-   if(isIncompatible.any())
-   {
-      //skip right to showing score
-      showScore();
-   }
-   else
-   {
-      //play the hit sound (then the dead sound) and then show score
-      soundHit.play().bindOnce("ended", function() {
-         soundDie.play().bindOnce("ended", function() {
-            showScore();
-         });
-      });
-   }
+   // SỬA: Gọi thẳng showScore() luôn, không cần kiểm tra thiết bị hay chờ nhạc
+   showScore();
 }
-
 function showScore()
 {
    //unhide us
