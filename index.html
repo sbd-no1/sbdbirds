@@ -51,14 +51,18 @@
    
          /* Chữ */
          .logo_text {
-            font-family: 'Flappy Bird', fantasy, sans-serif;
-            font-size: 20px;
-            color: white;
-            text-shadow: 2px 2px 0 #533847;
-            font-weight: bold;
-            display: block;
+             /* Font này máy nào cũng có, nhìn vuông vức kiểu máy tính cũ */
+             font-family: Menlo, 'Courier New', Courier, monospace;
+             
+             font-size: 18px; /* Tăng size lên chút vì font này hơi nhỏ */
+             font-weight: 900; /* In đậm hết cỡ để trông giống khối pixel */
+             
+             color: #ffffff;
+             text-shadow: 2px 2px 0 #533847; /* Bóng đổ làm chữ nổi bật */
+             text-transform: uppercase;
+             letter-spacing: -1px; /* Dồn chữ lại một chút cho nó đặc */
          }
-   
+            
          /* Hiệu ứng đong đưa */
          @keyframes sway {
             0%, 100% { transform: translateX(-50%) rotate(3deg); }
@@ -71,7 +75,7 @@
       <div id="gamecontainer">
          <div id="gamescreen">
             <div id="hanging_logo">
-                <span class="logo_text">SBD's Birds</span>
+                <span class="logo_text">SBD'S BIRDS</span>
             </div>
             
             <div id="sky" class="animated">
