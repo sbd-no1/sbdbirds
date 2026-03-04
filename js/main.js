@@ -25,13 +25,13 @@ var pipes = new Array();
 var replayclickable = false;
 
 //sounds
-var volume = 30;
-var soundJump = new buzz.sound("assets/sounds/sfx_wing.ogg");
-var soundScore = new buzz.sound("assets/sounds/sfx_point.ogg");
-var soundHit = new buzz.sound("assets/sounds/sfx_hit.ogg");
-var soundDie = new buzz.sound("assets/sounds/sfx_die.ogg");
-var soundSwoosh = new buzz.sound("assets/sounds/sfx_swooshing.ogg");
-buzz.all().setVolume(volume);
+//var volume = 30;
+//var soundJump = new buzz.sound("assets/sounds/sfx_wing.ogg");
+//var soundScore = new buzz.sound("assets/sounds/sfx_point.ogg");
+//var soundHit = new buzz.sound("assets/sounds/sfx_hit.ogg");
+//var soundDie = new buzz.sound("assets/sounds/sfx_die.ogg");
+//var soundSwoosh = new buzz.sound("assets/sounds/sfx_swooshing.ogg");
+//buzz.all().setVolume(volume);
 
 //loops
 var loopGameloop;
@@ -267,8 +267,8 @@ function playerJump()
 {
    velocity = jump;
    //play jump sound
-   soundJump.stop();
-   soundJump.play();
+   //soundJump.stop();
+   //soundJump.play();
 }
 
 function setBigScore(erase)
