@@ -50,33 +50,25 @@
          #hanging_logo::after { right: 40px; }
    
          /* Chữ */
-         .logo_text {
-             font-family: 'Courier New', Courier, monospace;
-             
-             /* 1. Kích hoạt chế độ đậm nhất */
-             font-weight: 900; 
-             
-             /* 2. BÍ QUYẾT: Vẽ thêm viền 1.5px màu trắng bao quanh để chữ dày lên gấp đôi */
-             -webkit-text-stroke: 1.5px #ffffff; 
-             
-             /* 3. Dồn chữ lại cho giống Pixel Art */
-             letter-spacing: -1px;
-             
-             /* Các thuộc tính cũ giữ nguyên */
-             font-size: 24px; 
-             color: #ffffff;
-             
-             /* Tạo bóng đen cứng (không nhòe) để làm nổi bật khối chữ */
-             text-shadow: 
-                 2px 2px 0 #533847,
-                 -1px -1px 0 #533847,  
-                 1px -1px 0 #533847,
-                 -1px 1px 0 #533847,
-                 1px 1px 0 #533847;
-                 
-             text-transform: uppercase;
-             display: block;
-         }
+           .logo_text {
+       font-family: 'Courier New', Courier, monospace;
+       
+       /* 1. Làm chữ dày nhất có thể */
+       font-weight: 900; 
+       font-size: 24px;
+       color: #ffffff; /* Màu chữ trắng */
+       
+       /* 2. TUYỆT CHIÊU: Tạo viền đen bằng 8 lớp bóng đổ xung quanh */
+       text-shadow: 
+           2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, /* 4 cạnh */
+           1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; /* 4 góc */
+       
+       /* 3. Dồn chữ lại cho giống khối pixel */
+       letter-spacing: -2px;
+       
+       text-transform: uppercase;
+       display: block;
+   }
             
          /* Hiệu ứng đong đưa */
          @keyframes sway {
