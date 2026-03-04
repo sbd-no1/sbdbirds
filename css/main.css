@@ -210,13 +210,12 @@ Screen - Game
 
 #scoreboard
 {
-   position: absolute;
-   display: none;
-   opacity: 0;
-   top: 64px;
-   left: 50%;
-   transform: translateX(-50%);
-   width: 236px;
+   position: absolute; 
+   display: none; 
+   opacity: 0; 
+   top: 64px; 
+   left: 50px; 
+   width: 236px; 
    height: 280px;
    background-image: url('../assets/scoreboard.png');
    background-repeat: no-repeat;
