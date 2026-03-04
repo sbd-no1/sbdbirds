@@ -19,7 +19,52 @@
       <!-- Style sheets -->
       <link href="css/reset.css" rel="stylesheet">
       <link href="css/main.css" rel="stylesheet">
-
+   <style>
+         #hanging_logo {
+            position: absolute;
+            top: 20px; /* Cách mép trên 20px */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            padding: 5px 10px;
+            background-color: #e89543; 
+            border: 3px solid #533847;
+            border-radius: 6px;
+            text-align: center;
+            box-shadow: 0 4px 0 #bf7230;
+            z-index: 999; /* Nổi lên trên cùng */
+            animation: sway 3s infinite ease-in-out;
+            transform-origin: top center;
+         }
+   
+         /* Dây treo */
+         #hanging_logo::before, #hanging_logo::after {
+            content: '';
+            position: absolute;
+            top: -25px; /* Độ dài dây */
+            width: 4px;
+            height: 25px;
+            background-color: #533847;
+         }
+         #hanging_logo::before { left: 40px; }
+         #hanging_logo::after { right: 40px; }
+   
+         /* Chữ */
+         .logo_text {
+            font-family: 'Flappy Bird', fantasy, sans-serif;
+            font-size: 20px;
+            color: white;
+            text-shadow: 2px 2px 0 #533847;
+            font-weight: bold;
+            display: block;
+         }
+   
+         /* Hiệu ứng đong đưa */
+         @keyframes sway {
+            0%, 100% { transform: translateX(-50%) rotate(3deg); }
+            50% { transform: translateX(-50%) rotate(-3deg); }
+         }
+      </style>
       <script defer src="https://yummy.nebez.dev/script.js" data-website-id="9ceaba15-371f-4407-a59a-f57a7214af41"></script>
    </head>
    <body>
