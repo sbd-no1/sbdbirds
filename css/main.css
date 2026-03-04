@@ -214,7 +214,8 @@ Screen - Game
    display: none;
    opacity: 0;
    top: 64px;
-   left: 43px;
+   left: 50%;
+   transform: translateX(-50%);
    width: 236px;
    height: 280px;
    background-image: url('../assets/scoreboard.png');
