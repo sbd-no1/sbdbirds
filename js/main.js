@@ -267,8 +267,8 @@ function playerJump()
 {
    velocity = jump;
    //play jump sound
-   soundJump.stop();
-   soundJump.play();
+   //soundJump.stop();
+   //soundJump.play();
 }
 
 function setBigScore(erase)
@@ -437,8 +437,8 @@ function playerScore()
 {
    score += 1;
    //play score sound
-   soundScore.stop();
-   soundScore.play();
+   //soundScore.stop();
+   //soundScore.play();
    setBigScore();
 }
 
