@@ -369,17 +369,25 @@ function playerDead()
 function showScore()
 {
    // 1. Xóa các class bảng điểm cũ (nếu có)
-   $("#scoreboard").removeClass("board-bronze board-silver board-gold board-platinum");
+   $("#scoreboard").removeClass("board-bronze board-bronze2 board-silver board-silver2 board-gold board-gold2 board-platinum board-platinum2");
 
    // 2. Kiểm tra điểm và thêm class tương ứng
-   if(score < 10) {
+   if(score < 5) {
       $("#scoreboard").addClass("board-bronze");
-   } else if(score < 20) {
+   } else if(score < 10) {
+      $("#scoreboard").addClass("board-bronze2");
+   } else if(score < 15) {
       $("#scoreboard").addClass("board-silver");
-   } else if(score < 30) {
+   } else if(score < 20) {
+      $("#scoreboard").addClass("board-silver2");
+   } else if(score < 25) {
       $("#scoreboard").addClass("board-gold");
-   } else {
+   } else if(score < 30) {
+      $("#scoreboard").addClass("board-gold2");
+   } else if(score < 35) {
       $("#scoreboard").addClass("board-platinum");
+   } else {
+      $("#scoreboard").addClass("board-platinum2");
    }
    //unhide us
    $("#scoreboard").css("display", "block");
