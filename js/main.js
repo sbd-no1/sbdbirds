@@ -18,7 +18,7 @@ var flyArea = $("#flyarea").height();
 var score = 0;
 var highscore = 0;
 
-var pipeheight = 90;
+var pipeheight = 95;
 var pipewidth = 52;
 var pipes = new Array();
 
@@ -368,6 +368,19 @@ function playerDead()
 
 function showScore()
 {
+   // 1. Xóa các class bảng điểm cũ (nếu có)
+   $("#scoreboard").removeClass("board-bronze board-silver board-gold board-platinum");
+
+   // 2. Kiểm tra điểm và thêm class tương ứng
+   if(score < 10) {
+      $("#scoreboard").addClass("board-bronze");
+   } else if(score < 20) {
+      $("#scoreboard").addClass("board-silver");
+   } else if(score < 30) {
+      $("#scoreboard").addClass("board-gold");
+   } else {
+      $("#scoreboard").addClass("board-platinum");
+   }
    //unhide us
    $("#scoreboard").css("display", "block");
 
