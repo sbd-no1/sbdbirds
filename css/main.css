@@ -217,11 +217,16 @@ Screen - Game
    left: 63px; 
    width: 236px; 
    height: 280px;
-   background-image: url('../assets/scoreboard.png');
+   /*background-image: url('../assets/scoreboard.png');*/
    background-repeat: no-repeat;
 
    z-index: 1000;
 }
+/* Thêm 4 class mới cho 4 loại bảng điểm */
+.board-bronze { background-image: url('../assets/scoreboard_bronze.png'); }
+.board-silver { background-image: url('../assets/scoreboard_silver.png'); }
+.board-gold   { background-image: url('../assets/scoreboard_gold.png'); }
+.board-platinum { background-image: url('../assets/scoreboard_platinum.png'); }
 
 #medal
 {
