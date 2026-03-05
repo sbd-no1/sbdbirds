@@ -224,13 +224,13 @@ Screen - Game
 }
 /* Thêm 4 class mới cho 4 loại bảng điểm */
 .board-bronze { background-image: url('../assets/scoreboard_bronze.png'); }
-.board-bronze { background-image: url('../assets/scoreboard_bronze2.png'); }
+.board-bronze2 { background-image: url('../assets/scoreboard_bronze2.png'); }
 .board-silver { background-image: url('../assets/scoreboard_silver.png'); }
-.board-silver { background-image: url('../assets/scoreboard_silver2.png'); }
+.board-silver2 { background-image: url('../assets/scoreboard_silver2.png'); }
 .board-gold   { background-image: url('../assets/scoreboard_gold.png'); }
-.board-gold   { background-image: url('../assets/scoreboard_gold2.png'); }
+.board-gold2   { background-image: url('../assets/scoreboard_gold2.png'); }
 .board-platinum { background-image: url('../assets/scoreboard_platinum.png'); }
-.board-platinum { background-image: url('../assets/scoreboard_platinum2.png'); }
+.board-platinum2 { background-image: url('../assets/scoreboard_platinum2.png'); }
 
 #medal
 {
