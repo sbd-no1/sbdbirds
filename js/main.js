@@ -8,11 +8,11 @@ var states = Object.freeze({
 
 var currentstate;
 
-var gravity = 0.6;
-var velocity = 0;
+var gravity = 0.4;
+var velocity = 4;
 var position = 180;
 var rotation = 0;
-var jump = -4.5;
+var jump = -4.6;
 var flyArea = $("#flyarea").height();
 
 var score = 0;
